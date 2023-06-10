@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft. All rights reserved.
 
-import { useAccount, useMsal } from '@azure/msal-react';
+import { useMsal } from '@azure/msal-react';
 import { Constants } from '../Constants';
 import { useAppDispatch, useAppSelector } from '../redux/app/hooks';
 import { RootState } from '../redux/app/store';
@@ -16,11 +16,11 @@ import {
 import { AuthHelper } from './auth/AuthHelper';
 import { AlertType } from './models/AlertType';
 import { Bot } from './models/Bot';
-import { AuthorRoles, ChatMessageState } from './models/ChatMessage';
+import { AuthorRoles, ChatMessageState, ChatMessageType, IChatMessage } from './models/ChatMessage';
 import { IChatSession } from './models/ChatSession';
 import { BotService } from './services/BotService';
 import { ChatService } from './services/ChatService';
-import { isPlan } from './utils/PlanUtils';
+import * as PlanUtils from './utils/PlanUtils';
 
 import botIcon1 from '../assets/bot-icons/bot-icon-1.png';
 import botIcon2 from '../assets/bot-icons/bot-icon-2.png';
@@ -31,10 +31,19 @@ import { IChatUser } from './models/ChatUser';
 
 import { AuthHeaderTags } from '../redux/features/plugins/PluginsState';
 
+export interface GetResponseOptions {
+    messageType: ChatMessageType;
+    value: string;
+    chatId: string;
+    approvedPlanJson?: string;
+    planUserIntent?: string;
+    userCancelledPlan?: boolean;
+}
+
 export const useChat = () => {
     const dispatch = useAppDispatch();
-    const { instance, accounts, inProgress } = useMsal();
-    const account = useAccount(accounts[0] || {});
+    const { instance, inProgress } = useMsal();
+    const account = instance.getActiveAccount();
     const { conversations } = useAppSelector((state: RootState) => state.conversations);
 
     const botService = new BotService(process.env.REACT_APP_BACKEND_URI as string);
@@ -94,13 +103,14 @@ export const useChat = () => {
         }
     };
 
-    const getResponse = async (
-        value: string,
-        chatId: string,
-        approvedPlanJson?: string,
-        planUserIntent?: string,
-        userCancelledPlan?: boolean,
-    ) => {
+    const getResponse = async ({
+        messageType,
+        value,
+        chatId,
+        approvedPlanJson,
+        planUserIntent,
+        userCancelledPlan,
+    }: GetResponseOptions) => {
         const ask = {
             input: value,
             variables: [
@@ -115,6 +125,10 @@ export const useChat = () => {
                 {
                     key: 'chatId',
                     value: chatId,
+                },
+                {
+                    key: 'messageType',
+                    value: messageType.toString(),
                 },
             ],
         };
@@ -146,14 +160,22 @@ export const useChat = () => {
                 getEnabledPlugins(),
             );
 
-            const messageResult = {
+            // When a document is uploaded we only save the user's message to storage, and
+            // do not generate a bot response. Therefore, we do not need to update the conversation.
+            if (messageType === ChatMessageType.Document) {
+                return;
+            }
+
+            const messageResult: IChatMessage = {
+                type: (result.variables.find((v) => v.key === 'messageType')?.value ??
+                    ChatMessageType.Message) as ChatMessageType,
                 timestamp: new Date().getTime(),
                 userName: 'bot',
                 userId: 'bot',
                 content: result.value,
                 prompt: result.variables.find((v) => v.key === 'prompt')?.value,
                 authorRole: AuthorRoles.Bot,
-                state: isPlan(result.value) ? ChatMessageState.PlanApprovalRequired : ChatMessageState.NoOp,
+                state: PlanUtils.isPlan(result.value) ? ChatMessageState.PlanApprovalRequired : ChatMessageState.NoOp,
             };
 
             dispatch(updateConversation({ message: messageResult, chatId: chatId }));
@@ -248,12 +270,26 @@ export const useChat = () => {
         return botProfilePictures[index % botProfilePictures.length];
     };
 
-     /*
+    const getChatMemorySources = async (chatId: string) => {
+        try {
+            return await chatService.getChatMemorySourcesAsync(
+                chatId,
+                await AuthHelper.getSKaaSAccessToken(instance, inProgress),
+            );
+        } catch (e: any) {
+            const errorMessage = `Unable to get chat files. Details: ${e.message ?? e}`;
+            dispatch(addAlert({ message: errorMessage, type: AlertType.Error }));
+        }
+
+        return [];
+    };
+
+    /*
      * Once enabled, each plugin will have a custom dedicated header in every Semantic Kernel request
      * containing respective auth information (i.e., token, encoded client info, etc.)
      * that the server can use to authenticate to the downstream APIs
      */
-     const getEnabledPlugins = () => {
+    const getEnabledPlugins = () => {
         const enabledPlugins: { headerTag: AuthHeaderTags; authData: string; apiProperties?: any }[] = [];
 
         Object.entries(plugins).map((entry) => {
@@ -280,5 +316,6 @@ export const useChat = () => {
         getResponse,
         downloadBot,
         uploadBot,
+        getChatMemorySources,
     };
 };
