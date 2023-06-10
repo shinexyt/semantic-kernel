@@ -82,6 +82,11 @@ public sealed class NullMemory : ISemanticTextMemory
         return Task.FromResult<IList<string>>(new List<string>());
     }
 
+    public Task DeleteAsync(string collection, CancellationToken cancellationToken = default)
+    {
+        throw new System.NotImplementedException();
+    }
+
     private NullMemory()
     {
     }

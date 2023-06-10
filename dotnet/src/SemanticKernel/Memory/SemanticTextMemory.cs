@@ -131,4 +131,9 @@ public sealed class SemanticTextMemory : ISemanticTextMemory, IDisposable
         // ReSharper disable once SuspiciousTypeConversion.Global
         if (this._storage is IDisposable storage) { storage.Dispose(); }
     }
+
+    public async Task DeleteAsync(string collection, CancellationToken cancellationToken = default)
+    {
+        await this._storage.DeleteCollectionAsync(collection, cancellationToken).ConfigureAwait(false);
+    }
 }
