@@ -368,11 +368,5 @@ public class AzureCognitiveSearchMemory : ISemanticTextMemory
         var bytes = Convert.FromBase64String(encodedId);
         return Encoding.UTF8.GetString(bytes);
     }
-
-    public Task DeleteAsync(string collection, CancellationToken cancellationToken = default)
-    {
-        throw new NotImplementedException();
-    }
-
     #endregion
 }

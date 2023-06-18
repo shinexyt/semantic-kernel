@@ -71,8 +71,6 @@ public interface ISemanticTextMemory
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests. The default is <see cref="CancellationToken.None"/>.</param>
     public Task RemoveAsync(string collection, string key, CancellationToken cancellationToken = default);
 
-    public Task DeleteAsync(string collection, CancellationToken cancellationToken = default);
-
     /// <summary>
     /// Find some information in memory
     /// </summary>
